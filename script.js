@@ -25,8 +25,7 @@ const MACKEREL_HOST_ID = PropertiesService.getScriptProperties().getProperty("MA
  */
 const TARGET_NATURE_REMO_ID = PropertiesService.getScriptProperties().getProperty("TARGET_NATURE_REMO_ID");
 
-function getNatureDevices() {
-
+function requestNatureAPI(requestUrl) {
     // https://www.monotalk.xyz/blog/google-apps-script-urlfetchapp-%E3%81%A7-http-header-%E3%82%92%E8%A8%AD%E5%AE%9A%E3%81%99%E3%82%8B/
     const headers = {
         'accept': "application/json",
@@ -36,8 +35,18 @@ function getNatureDevices() {
         "method": "GET",
         "headers": headers,
     };
-    const requestUrl = "https://api.nature.global/1/devices";
-    const response = UrlFetchApp.fetch(requestUrl, options);
+
+    return UrlFetchApp.fetch(requestUrl, options);
+}
+
+function getNatureAppliances() {
+    const response = requestNatureAPI("https://api.nature.global/1/appliances")
+
+    return JSON.parse(response.getContentText());
+}
+
+function getNatureDevices() {
+    const response = requestNatureAPI("https://api.nature.global/1/devices")
 
     return JSON.parse(response.getContentText());
 }
@@ -113,4 +122,29 @@ function exec() {
     const metricValue = convertMackerelMetricValue(name, result)
     Logger.log(metricValue)
     postMackerel(metricValue)
+}
+
+/**
+ * Nature Remo Cloud APIのGET /1/appliancesから取得したJSONから、スマートメーターに関する値を成形して返す
+ * スマートメーターの値の成形については、https://developer.nature.global/jp/how-to-calculate-energy-data-from-smart-meter-values 参照
+ *
+ * @param appliances Nature Remo Cloud APIのGET /1/appliancesから取得したJSON
+ */
+function getSmartMeterValues(appliances) {
+    // smart_meterのkeyの存在有無でスマートメーターの値か否かを判定
+    // 一旦、スマートメーターを複数設置しないという想定で[0]決め打ち
+    const smartMeter = appliances.filter(function (obj) {
+        return 'smart_meter' in obj
+    })[0].smart_meter
+
+    Logger.log(smartMeter.echonetlite_properties);
+    smartMeter.echonetlite_properties.forEach(function (property) {
+        // TODO: https://developer.nature.global/jp/how-to-calculate-energy-data-from-smart-meter-values を参考に必要な実装を行う
+        Logger.log(property)
+    })
+}
+
+function test() {
+    const appliances = getNatureAppliances()
+    const smartMeterValues = getSmartMeterValues(appliances)
 }
