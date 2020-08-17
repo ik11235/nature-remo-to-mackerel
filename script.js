@@ -72,8 +72,6 @@ function convertMackerelMetricValue(result) {
             time: Math.floor(new Date(value['created_at']).getTime() / 1000),
             value: value['val'],
         });
-        // val=1.0, created_at=2020-08-17T08:45:21Z
-
     }
 
     return return_array
@@ -85,8 +83,6 @@ function exec() {
         return object.id === "XXXX";
     })[0];
 
-    console.log(natureRemoData);
-
     const result = {
         temperature: natureRemoData['newest_events']['te'],
         humidity: natureRemoData['newest_events']['hu'],
@@ -94,7 +90,5 @@ function exec() {
         human_sensor: natureRemoData['newest_events']['mo']
     };
 
-
-    Logger.log(convertMackerelMetricValue(result));
     postMackerel(convertMackerelMetricValue(result));
 }
