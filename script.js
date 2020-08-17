@@ -97,5 +97,7 @@ function exec() {
         human_sensor: natureRemoData['newest_events']['mo']
     };
 
-    postMackerel(convertMackerelMetricValue(result));
+    const metricValue = convertMackerelMetricValue(result)
+    Logger.log(metricValue)
+    postMackerel(metricValue)
 }
