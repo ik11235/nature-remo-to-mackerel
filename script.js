@@ -67,15 +67,21 @@ function postMackerel(metricsValue) {
 
 }
 
-// 取得した値をmetricValue形式に変換する https://mackerel.io/ja/api-docs/entry/host-metrics#post
-function convertMackerelMetricValue(result) {
+/**
+ * Nature RemoAPIから返ってきたnewest_eventsの各値をmetricValueのarrayに変換する
+ * metricValueは https://mackerel.io/ja/api-docs/entry/host-metrics#post 参照
+ * @param name deviceの名前(Mackerelのメトリック分割用に `device名.key`という名前に変換する)
+ * @param result
+ * @returns {Object[]} metricValueの形に合わせた値の配列
+ */
+function convertMackerelMetricValue(name, result) {
 
     let return_array = []
 
     for (const [key, value] of Object.entries(result)) {
         return_array.push({
             hostId: MACKEREL_HOST_ID,
-            name: key,
+            name: `${name}.${key}`,
             time: Math.floor(new Date(value['created_at']).getTime() / 1000),
             value: value['val'],
         });
@@ -90,6 +96,7 @@ function exec() {
         return object.id === TARGET_NATURE_REMO_ID;
     })[0];
 
+    const name = natureRemoData["name"];
     const result = {
         temperature: natureRemoData['newest_events']['te'],
         humidity: natureRemoData['newest_events']['hu'],
@@ -97,7 +104,7 @@ function exec() {
         human_sensor: natureRemoData['newest_events']['mo']
     };
 
-    const metricValue = convertMackerelMetricValue(result)
+    const metricValue = convertMackerelMetricValue(name, result)
     Logger.log(metricValue)
     postMackerel(metricValue)
 }
