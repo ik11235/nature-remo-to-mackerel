@@ -1,7 +1,26 @@
+/**
+ * Nature Remo Cloud APIを操作するためのアクセストークン
+ * @see: https://developer.nature.global/
+ * @type {string}
+ */
+const NATURE_TOKEN = PropertiesService.getScriptProperties().getProperty("NATURE_TOKEN");
+/**
+ * MackerelのAPIを操作するためのアクセストークン(要Write権限)
+ * @see: https://mackerel.io/my?tab=apikeys
+ * @type {string}
+ */
+const MACKEREL_TOKEN = PropertiesService.getScriptProperties().getProperty("MACKEREL_TOKEN");
+/**
+ * Mackerelに取得した値を書き込む際、対象となるホストの固有ID
+ * 管理画面・APIResponseから確認可能
+ *
+ * @type {string}
+ */
+const MACKEREL_HOST_ID = PropertiesService.getScriptProperties().getProperty("MACKEREL_HOST_ID");
+
 // 近いことやってる人はすでにいたのでmemo https://qiita.com/merarli/items/12124d51fc3332989f84
 
 function getNatureDevices() {
-    const NATURE_TOKEN = PropertiesService.getScriptProperties().getProperty("NATURE_TOKEN");
 
     // https://www.monotalk.xyz/blog/google-apps-script-urlfetchapp-%E3%81%A7-http-header-%E3%82%92%E8%A8%AD%E5%AE%9A%E3%81%99%E3%82%8B/
     const headers = {
@@ -19,7 +38,6 @@ function getNatureDevices() {
 }
 
 function postMackerel(metricsValue) {
-    const MACKEREL_TOKEN = PropertiesService.getScriptProperties().getProperty("MACKEREL_TOKEN");
 
     // https://www.monotalk.xyz/blog/google-apps-script-urlfetchapp-%E3%81%A7-http-header-%E3%82%92%E8%A8%AD%E5%AE%9A%E3%81%99%E3%82%8B/
 
@@ -45,7 +63,6 @@ function postMackerel(metricsValue) {
 // 取得した値をmetricValue形式に変換する https://mackerel.io/ja/api-docs/entry/host-metrics#post
 function convertMackerelMetricValue(result) {
 
-    const MACKEREL_HOST_ID = PropertiesService.getScriptProperties().getProperty("MACKEREL_HOST_ID");
     let return_array = []
 
     for (const [key, value] of Object.entries(result)) {
