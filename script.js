@@ -17,6 +17,13 @@ const MACKEREL_TOKEN = PropertiesService.getScriptProperties().getProperty("MACK
  * @type {string}
  */
 const MACKEREL_HOST_ID = PropertiesService.getScriptProperties().getProperty("MACKEREL_HOST_ID");
+/**
+ * 気温などの値を取得するNATURE_REMOのID
+ * 複数台のNature Remoや、Nature Remo Eと併用している場合、複数のdeviceが取得されるので、1つに絞るために使用
+ *
+ * @type {string}
+ */
+const TARGET_NATURE_REMO_ID = PropertiesService.getScriptProperties().getProperty("TARGET_NATURE_REMO_ID");
 
 // 近いことやってる人はすでにいたのでmemo https://qiita.com/merarli/items/12124d51fc3332989f84
 
@@ -80,7 +87,7 @@ function convertMackerelMetricValue(result) {
 function exec() {
     const natureResponce = getNatureDevices()
     const natureRemoData = natureResponce.filter(function (object) {
-        return object.id === "XXXX";
+        return object.id === TARGET_NATURE_REMO_ID;
     })[0];
 
     const result = {
