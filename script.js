@@ -25,8 +25,6 @@ const MACKEREL_HOST_ID = PropertiesService.getScriptProperties().getProperty("MA
  */
 const TARGET_NATURE_REMO_ID = PropertiesService.getScriptProperties().getProperty("TARGET_NATURE_REMO_ID");
 
-// 近いことやってる人はすでにいたのでmemo https://qiita.com/merarli/items/12124d51fc3332989f84
-
 function getNatureDevices() {
 
     // https://www.monotalk.xyz/blog/google-apps-script-urlfetchapp-%E3%81%A7-http-header-%E3%82%92%E8%A8%AD%E5%AE%9A%E3%81%99%E3%82%8B/
@@ -90,6 +88,14 @@ function convertMackerelMetricValue(name, result) {
     return return_array
 }
 
+/**
+ * このGASの本体
+ * 以下の処理を行う
+ *  - Nature Remo Cloud APIから各種値を取得
+ *  - 取得した値をMackerelにPost
+ *
+ *  近いことやってる人はすでにいたのでmemo https://qiita.com/merarli/items/12124d51fc3332989f84
+ */
 function exec() {
     const natureResponce = getNatureDevices()
     const natureRemoData = natureResponce.filter(function (object) {
