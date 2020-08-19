@@ -219,9 +219,3 @@ function getCumulativeUnit(cumulativeUnit) {
             throw 'Parameter is not a cumulativeUnit!';
     }
 }
-
-function test() {
-    const appliances = getNatureAppliances()
-    const smartMeterValues = getSmartMeterValues(appliances)
-    Logger.log(smartMeterValues)
-}
