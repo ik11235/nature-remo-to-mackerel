@@ -121,10 +121,11 @@ function exec() {
         human_sensor: natureRemoData['newest_events']['mo']
     };
 
+    const natureRemoMetricValue = convertMackerelMetricValue(name, result)
     const appliances = getNatureAppliances()
     const smartMeterMetricValue = getSmartMeterValues(appliances)
-    const natureRemoMetricValue = convertMackerelMetricValue(name, result)
-    const metricValue = object.assign(smartMeterMetricValue, natureRemoMetricValue);
+    const metricValue = natureRemoMetricValue.concat(smartMeterMetricValue);
+
     Logger.log(metricValue)
     postMackerel(metricValue)
 }
