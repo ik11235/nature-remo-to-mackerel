@@ -137,11 +137,81 @@ function getSmartMeterValues(appliances) {
         return 'smart_meter' in obj
     })[0].smart_meter
 
-    Logger.log(smartMeter.echonetlite_properties);
-    smartMeter.echonetlite_properties.forEach(function (property) {
-        // TODO: https://developer.nature.global/jp/how-to-calculate-energy-data-from-smart-meter-values を参考に必要な実装を行う
-        Logger.log(property)
-    })
+    const properties = convertSmartMeterProperties(smartMeter.echonetlite_properties);
+    const smartMeterValues = convertSmartMeterValues(properties);
+    Logger.log(smartMeterValues);
+}
+
+/**
+ * スマートメーターから受け取った値郡のArrayをオブジェクトに変換する
+ * 参考: https://developer.nature.global/jp/how-to-calculate-energy-data-from-smart-meter-values
+ *
+ * @param properties
+ * @returns {{cumulative_electric_energy_effective_digits: *, cumulative_electric_energy_unit: *, normal_direction_cumulative_electric_energy: *, coefficient: *, reverse_direction_cumulative_electric_energy: *, measured_instantaneous: *}}
+ */
+function convertSmartMeterProperties(properties) {
+    return {
+        normal_direction_cumulative_electric_energy: properties.filter(obj => obj.epc == 224)[0],
+        reverse_direction_cumulative_electric_energy: properties.filter(obj => obj.epc == 227)[0],
+        coefficient: properties.filter(obj => obj.epc == 211)[0],
+        cumulative_electric_energy_unit: properties.filter(obj => obj.epc == 225)[0],
+        cumulative_electric_energy_effective_digits: properties.filter(obj => obj.epc == 215)[0],
+        measured_instantaneous: properties.filter(obj => obj.epc == 231)[0],
+    };
+}
+
+/**
+ * convertSmartMeterPropertiesで変換した値を、扱いやすい形に変換する
+ * @param properties
+ */
+function convertSmartMeterValues(properties) {
+    const cumulativeUnit = getCumulativeUnit(properties.cumulative_electric_energy_unit.val);
+    Logger.log(properties.normal_direction_cumulative_electric_energy.val)
+    Logger.log(properties.coefficient)
+    Logger.log(cumulativeUnit)
+    const normal_electric_energy = {
+        val: properties.normal_direction_cumulative_electric_energy.val * properties.coefficient.val * cumulativeUnit,
+        updated_at: properties.normal_direction_cumulative_electric_energy.updated_at
+    }
+    const reverse_electric_energy = {
+        val: properties.reverse_direction_cumulative_electric_energy.val * properties.coefficient.val * cumulativeUnit,
+        updated_at: properties.reverse_direction_cumulative_electric_energy.updated_at
+    }
+    const measured_instantaneous = {
+        val: properties.measured_instantaneous.val,
+        updated_at: properties.measured_instantaneous.updated_at
+    }
+
+    return {
+        normal_electric_energy: normal_electric_energy,
+        reverse_electric_energy: reverse_electric_energy,
+        measured_instantaneous: measured_instantaneous
+    }
+}
+
+function getCumulativeUnit(cumulativeUnit) {
+    switch (Number(cumulativeUnit)) {
+        case 0x00:
+            return 1
+        case 0x01:
+            return 0.1
+        case 0x02:
+            return 0.01
+        case 0x03:
+            return 0.001
+        case 0x04:
+            return 0.0001
+        case 0x0A:
+            return 10
+        case 0x0B:
+            return 100
+        case 0x0C:
+            return 1000
+        case 0x0D:
+            return 10000
+        default:
+            throw 'Parameter is not a cumulativeUnit!';
+    }
 }
 
 function test() {
