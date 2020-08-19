@@ -86,7 +86,7 @@ function convertMackerelMetricValue(name, result) {
     let return_array = []
 
     for (const [key, value] of Object.entries(result)) {
-        const timeBaseValue =  value['created_at'] || value['updated_at']
+        const timeBaseValue = value['created_at'] || value['updated_at']
         return_array.push({
             hostId: MACKEREL_HOST_ID,
             name: `${name}.${key}`,
@@ -120,7 +120,10 @@ function exec() {
         human_sensor: natureRemoData['newest_events']['mo']
     };
 
-    const metricValue = convertMackerelMetricValue(name, result)
+    const appliances = getNatureAppliances()
+    const smartMeterMetricValue = getSmartMeterValues(appliances)
+    const natureRemoMetricValue = convertMackerelMetricValue(name, result)
+    const metricValue = object.assign(smartMeterMetricValue, natureRemoMetricValue);
     Logger.log(metricValue)
     postMackerel(metricValue)
 }
