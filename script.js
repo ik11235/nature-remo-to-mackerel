@@ -87,11 +87,12 @@ function convertMackerelMetricValue(name, result) {
 
     for (const [key, value] of Object.entries(result)) {
         const timeBaseValue = value['created_at'] || value['updated_at']
+        const escapeName = `${name}.${key}`.split(' ').join('_')
         return_array.push({
             hostId: MACKEREL_HOST_ID,
-            name: `${name}.${key}`,
+            name: escapeName,
             time: Math.floor(new Date(timeBaseValue).getTime() / 1000),
-            value: value['val'],
+            value: Number(value['val']),
         });
     }
 
