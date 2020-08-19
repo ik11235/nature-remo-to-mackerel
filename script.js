@@ -169,9 +169,7 @@ function convertSmartMeterProperties(properties) {
  */
 function convertSmartMeterValues(properties) {
     const cumulativeUnit = getCumulativeUnit(properties.cumulative_electric_energy_unit.val);
-    Logger.log(properties.normal_direction_cumulative_electric_energy.val)
-    Logger.log(properties.coefficient)
-    Logger.log(cumulativeUnit)
+
     const normal_electric_energy = {
         val: properties.normal_direction_cumulative_electric_energy.val * properties.coefficient.val * cumulativeUnit,
         updated_at: properties.normal_direction_cumulative_electric_energy.updated_at
@@ -220,4 +218,5 @@ function getCumulativeUnit(cumulativeUnit) {
 function test() {
     const appliances = getNatureAppliances()
     const smartMeterValues = getSmartMeterValues(appliances)
+    Logger.log(smartMeterValues)
 }
