@@ -151,7 +151,7 @@ function getSmartMeterValues(appliances) {
 }
 
 /**
- * スマートメーターから受け取った値郡のArrayをオブジェクトに変換する
+ * スマートメーターから受け取った値群のArrayをオブジェクトに変換する
  * 参考: https://developer.nature.global/jp/how-to-calculate-energy-data-from-smart-meter-values
  *
  * @param properties
@@ -170,7 +170,9 @@ function convertSmartMeterProperties(properties) {
 
 /**
  * convertSmartMeterPropertiesで変換した値を、扱いやすい形に変換する
+ *
  * @param properties
+ * @returns {{normal_electric_energy: {val: number, updated_at: *}, reverse_electric_energy: {val: number, updated_at: *}, measured_instantaneous: {val: *, updated_at: *}}}
  */
 function convertSmartMeterValues(properties) {
     const cumulativeUnit = getCumulativeUnit(properties.cumulative_electric_energy_unit.val);
@@ -195,6 +197,12 @@ function convertSmartMeterValues(properties) {
     }
 }
 
+/**
+ * スマートメーターから取得した積算電力量単位を実際の単位(kW)に変換する
+ *
+ * @param cumulativeUnit
+ * @return {Number}
+ */
 function getCumulativeUnit(cumulativeUnit) {
     switch (Number(cumulativeUnit)) {
         case 0x00:
