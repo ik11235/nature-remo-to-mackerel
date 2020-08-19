@@ -86,10 +86,11 @@ function convertMackerelMetricValue(name, result) {
     let return_array = []
 
     for (const [key, value] of Object.entries(result)) {
+        const timeBaseValue =  value['created_at'] || value['updated_at']
         return_array.push({
             hostId: MACKEREL_HOST_ID,
             name: `${name}.${key}`,
-            time: Math.floor(new Date(value['created_at']).getTime() / 1000),
+            time: Math.floor(new Date(timeBaseValue).getTime() / 1000),
             value: value['val'],
         });
     }
@@ -135,11 +136,13 @@ function getSmartMeterValues(appliances) {
     // 一旦、スマートメーターを複数設置しないという想定で[0]決め打ち
     const smartMeter = appliances.filter(function (obj) {
         return 'smart_meter' in obj
-    })[0].smart_meter
+    })[0]
 
-    const properties = convertSmartMeterProperties(smartMeter.echonetlite_properties);
+    const name = smartMeter.device.name
+    const properties = convertSmartMeterProperties(smartMeter.smart_meter.echonetlite_properties);
     const smartMeterValues = convertSmartMeterValues(properties);
-    Logger.log(smartMeterValues);
+
+    return convertMackerelMetricValue(name, smartMeterValues);
 }
 
 /**
