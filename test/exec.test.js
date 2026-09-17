@@ -394,13 +394,72 @@ test('HTTPリクエスト', async (t) => {
     });
 });
 
+test('サービスメトリックとして送信する', async (t) => {
+    /**
+     * MACKEREL_HOST_IDの代わりにMACKEREL_SERVICE_NAMEを設定した状態
+     */
+    function serviceProperties(serviceName = 'home') {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {MACKEREL_SERVICE_NAME: serviceName});
+        delete properties.MACKEREL_HOST_ID;
+        return properties;
+    }
+
+    await t.test('サービスメトリックのエンドポイントへPOSTする', () => {
+        const result = runExec({devices: temperatureAndHumidityDevice(), properties: serviceProperties()});
+        const request = result.requests.find((r) => r.options.method === 'POST');
+
+        assert.strictEqual(request.url, 'https://api.mackerelio.com/api/v0/services/home/tsdb');
+    });
+
+    await t.test('hostIdを含めない', () => {
+        const result = runExec({devices: temperatureAndHumidityDevice(), properties: serviceProperties()});
+
+        assert.ok(result.metrics.length > 0);
+        assert.ok(result.metrics.every((metric) => !('hostId' in metric)));
+    });
+
+    await t.test('メトリック名と値はホストメトリックと同じ', () => {
+        const result = runExec({
+            devices: temperatureAndHumidityDevice(),
+            appliances: smartMeterAppliances(),
+            properties: serviceProperties(),
+        });
+
+        assert.deepStrictEqual(toNameValue(result.metrics), {
+            'Remo_Lapis.temperature': 22.8,
+            'Remo_Lapis.humidity': 68,
+            'Remo_E_lite.normal_electric_energy': 3756.9,
+            'Remo_E_lite.reverse_electric_energy': 1.1,
+            'Remo_E_lite.measured_instantaneous': 504,
+        });
+    });
+
+    await t.test('サービス名をURLエスケープする', () => {
+        const result = runExec({
+            devices: temperatureAndHumidityDevice(),
+            properties: serviceProperties('my home'),
+        });
+        const request = result.requests.find((r) => r.options.method === 'POST');
+
+        assert.strictEqual(request.url, 'https://api.mackerelio.com/api/v0/services/my%20home/tsdb');
+    });
+
+    await t.test('MACKEREL_SERVICE_NAMEが未設定ならホストメトリックへ送る', () => {
+        const result = runExec({devices: temperatureAndHumidityDevice()});
+        const request = result.requests.find((r) => r.options.method === 'POST');
+
+        assert.strictEqual(request.url, 'https://api.mackerelio.com/api/v0/tsdb');
+        assert.ok(result.metrics.every((metric) => metric.hostId === DEFAULT_PROPERTIES.MACKEREL_HOST_ID));
+    });
+});
+
 test('スクリプトプロパティの検証', async (t) => {
     await t.test('未設定のプロパティがある場合、APIを呼ばずに失敗する', () => {
-        const properties = Object.assign({}, DEFAULT_PROPERTIES, {MACKEREL_HOST_ID: null});
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {MACKEREL_TOKEN: null});
 
         const result = runExec({devices: temperatureAndHumidityDevice(), properties: properties});
 
-        assert.match(result.error.message, /script property is not set: MACKEREL_HOST_ID/);
+        assert.match(result.error.message, /script property is not set: MACKEREL_TOKEN/);
         assert.deepStrictEqual(result.requests, []);
     });
 
@@ -409,7 +468,7 @@ test('スクリプトプロパティの検証', async (t) => {
 
         assert.match(
             result.error.message,
-            /script property is not set: NATURE_TOKEN, MACKEREL_TOKEN, MACKEREL_HOST_ID/,
+            /script property is not set: NATURE_TOKEN, MACKEREL_TOKEN/,
         );
     });
 
@@ -419,6 +478,24 @@ test('スクリプトプロパティの検証', async (t) => {
         const result = runExec({devices: temperatureAndHumidityDevice(), properties: properties});
 
         assert.strictEqual(result.error, null);
+    });
+
+    await t.test('書き込み先がどちらも未設定の場合、APIを呼ばずに失敗する', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {MACKEREL_HOST_ID: null});
+
+        const result = runExec({devices: temperatureAndHumidityDevice(), properties: properties});
+
+        assert.match(result.error.message, /MACKEREL_HOST_ID or MACKEREL_SERVICE_NAME/);
+        assert.deepStrictEqual(result.requests, []);
+    });
+
+    await t.test('書き込み先が両方設定されている場合、APIを呼ばずに失敗する', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {MACKEREL_SERVICE_NAME: 'home'});
+
+        const result = runExec({devices: temperatureAndHumidityDevice(), properties: properties});
+
+        assert.match(result.error.message, /set only one of MACKEREL_HOST_ID or MACKEREL_SERVICE_NAME/);
+        assert.deepStrictEqual(result.requests, []);
     });
 });
 

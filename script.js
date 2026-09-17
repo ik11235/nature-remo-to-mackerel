@@ -18,6 +18,14 @@ const MACKEREL_TOKEN = PropertiesService.getScriptProperties().getProperty("MACK
  */
 const MACKEREL_HOST_ID = PropertiesService.getScriptProperties().getProperty("MACKEREL_HOST_ID");
 /**
+ * ホストではなくサービスに値を書き込む場合の、対象となるサービス名
+ * MACKEREL_HOST_IDとどちらか一方のみを設定する
+ *
+ * @see: https://mackerel.io/ja/api-docs/entry/service-metrics
+ * @type {string}
+ */
+const MACKEREL_SERVICE_NAME = PropertiesService.getScriptProperties().getProperty("MACKEREL_SERVICE_NAME");
+/**
  * 気温などの値を取得するNATURE_REMOのID
  * 複数台を対象にする場合はカンマ区切りで指定する (例: `id1,id2`)
  * 未指定の場合は、取得できた全デバイスを対象にする
@@ -57,12 +65,19 @@ function exec() {
         const properties = {
             NATURE_TOKEN: NATURE_TOKEN,
             MACKEREL_TOKEN: MACKEREL_TOKEN,
-            MACKEREL_HOST_ID: MACKEREL_HOST_ID,
         };
 
         const missing = Object.keys(properties).filter(key => !properties[key]);
         if (missing.length > 0) {
             throw new Error(`script property is not set: ${missing.join(', ')}. set them in プロジェクトの設定 > スクリプト プロパティ.`);
+        }
+
+        // 書き込み先はホストかサービスのどちらか。両方設定されていると意図が判断できない
+        if (MACKEREL_HOST_ID && MACKEREL_SERVICE_NAME) {
+            throw new Error('set only one of MACKEREL_HOST_ID or MACKEREL_SERVICE_NAME.');
+        }
+        if (!MACKEREL_HOST_ID && !MACKEREL_SERVICE_NAME) {
+            throw new Error('script property is not set: MACKEREL_HOST_ID or MACKEREL_SERVICE_NAME. set them in プロジェクトの設定 > スクリプト プロパティ.');
         }
     }
 
@@ -121,7 +136,12 @@ function exec() {
 
     /**
      * Mackerelのメトリクス追加APIに対して、引数で渡されたmetricsValueをPOSTする
+     *
+     * MACKEREL_SERVICE_NAMEが設定されている場合はサービスメトリック、
+     * そうでない場合はホストメトリックとして書き込む
+     *
      * API詳細は https://mackerel.io/ja/api-docs/entry/host-metrics#post
+     * および https://mackerel.io/ja/api-docs/entry/service-metrics#post
      *
      * @param metricsValue
      */
@@ -139,7 +159,9 @@ function exec() {
             "headers": headers,
             "payload": payload,
         };
-        const requestUrl = "https://api.mackerelio.com/api/v0/tsdb";
+        const requestUrl = MACKEREL_SERVICE_NAME
+            ? `https://api.mackerelio.com/api/v0/services/${encodeURIComponent(MACKEREL_SERVICE_NAME)}/tsdb`
+            : "https://api.mackerelio.com/api/v0/tsdb";
 
         try {
             fetchWithRetry(requestUrl, options);
@@ -182,12 +204,18 @@ function exec() {
             }
 
             const escapeName = `${name}.${key}`.split(' ').join('_')
-            return_array.push({
-                hostId: MACKEREL_HOST_ID,
+            const metric = {
                 name: escapeName,
                 time: time,
                 value: metricValue,
-            });
+            };
+
+            // サービスメトリックはhostIdを持たない
+            if (!MACKEREL_SERVICE_NAME) {
+                metric.hostId = MACKEREL_HOST_ID;
+            }
+
+            return_array.push(metric);
         }
 
         return return_array

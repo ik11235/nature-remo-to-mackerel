@@ -35,12 +35,22 @@ GASエディタの「プロジェクトの設定 > スクリプト プロパテ�
 | --- | --- |
 | `NATURE_TOKEN` | Nature Remo Cloud APIを操作するためのアクセストークン |
 | `MACKEREL_TOKEN` | MackerelのAPIを操作するためのアクセストークン(要Write権限) |
-| `MACKEREL_HOST_ID` | Mackerelに取得した値を書き込む際、対象となるホストの固有ID |
+| `MACKEREL_HOST_ID` | 取得した値を書き込む対象となるホストの固有ID |
+| `MACKEREL_SERVICE_NAME` | ホストではなくサービスに書き込む場合のサービス名 |
 | `TARGET_NATURE_REMO_ID` | 気温などの値を取得するNature RemoのID(任意) |
 | `STALE_THRESHOLD_MINUTES` | 値の更新が止まったと判断するまでの分数(任意、既定値180) |
 
 `TARGET_NATURE_REMO_ID` は複数台を対象にする場合カンマ区切りで指定する (例: `id1,id2`)。
 未指定の場合は、取得できた全デバイスを対象にする。
+
+`MACKEREL_HOST_ID` と `MACKEREL_SERVICE_NAME` は、どちらか一方だけを設定する。
+両方設定した場合・どちらも未設定の場合はエラーで停止する。
+
+- `MACKEREL_HOST_ID` を設定 → [ホストメトリック](https://mackerel.io/ja/api-docs/entry/host-metrics)として書き込む
+- `MACKEREL_SERVICE_NAME` を設定 → [サービスメトリック](https://mackerel.io/ja/api-docs/entry/service-metrics)として書き込む
+
+Mackerel上にホストを持たない運用の場合はサービスメトリックを使う。
+メトリック名と値は、どちらでも同じ。
 
 `TARGET_NATURE_REMO_ID` と `STALE_THRESHOLD_MINUTES` 以外が未設定の場合、APIを呼ぶ前にエラーで停止する。
 
