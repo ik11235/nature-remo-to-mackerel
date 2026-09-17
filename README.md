@@ -64,3 +64,6 @@ GASへはpushされない。
 
 masterへのpushとpull requestで、GitHub Actionsが `npm test` を実行する(Node.js 18 / 22)。
 定義は `.github/workflows/test.yml`。
+
+workflowで使うactionのバージョン更新は、Dependabotが週次でまとめてPRを作る(`.github/dependabot.yml`)。
+npmの依存パッケージを持たないため、監視対象はGitHub Actionsのみ。
