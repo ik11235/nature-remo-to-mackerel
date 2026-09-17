@@ -1,5 +1,7 @@
 # nature-remo-to-mackerel
 
+[![test](https://github.com/ik11235/nature-remo-to-mackerel/actions/workflows/test.yml/badge.svg)](https://github.com/ik11235/nature-remo-to-mackerel/actions/workflows/test.yml)
+
 Nature Remo, Nature Remo E で取得した温度・湿度・照度・人感・スマートメーターの値をMackerelにPOSTするGoogle Apps Script
 
 # 使い方
@@ -54,3 +56,8 @@ Node.js標準の `node:test` のみを使うため、依存パッケージのイ
 
 `test/` 以下は `.claspignore` の `**/**` で除外される(再includeしているのはルート直下の `*.js` のみ)ため、
 GASへはpushされない。
+
+## CI
+
+masterへのpushとpull requestで、GitHub Actionsが `npm test` を実行する(Node.js 18 / 22)。
+定義は `.github/workflows/test.yml`。

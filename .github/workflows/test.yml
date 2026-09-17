@@ -1,0 +1,25 @@
+name: test
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # package.json の engines で宣言している下限と、現行のLTSを確認する
+        node-version:
+          - '18'
+          - '22'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+      # 依存パッケージを持たないため npm ci は不要
+      - run: npm test
