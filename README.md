@@ -139,10 +139,22 @@ npm test
 (再includeしているのはルート直下の `*.js` と `appsscript.json` のみ)ため、GASへはpushされない。
 実際にpushされる対象は `npm run status` で確認できる。
 
+## Lint
+
+```
+npm run lint
+```
+
+設定は `eslint.config.js`。`script.js` はGASのグローバル(`PropertiesService` など)を参照し、
+`test/` 以下はCommonJSとNode.jsのグローバルを使うため、それぞれ別の設定を当てている。
+
+`exec` はGASのトリガーから呼ばれるため、コード上は未使用に見える。
+`no-unused-vars` の `varsIgnorePattern` で除外している(外すとエラーになる)。
+
 ## CI
 
-masterへのpushとpull requestで、GitHub Actionsが `npm test` を実行する(Node.js 22 / 24 / 26)。
-定義は `.github/workflows/test.yml`。
+masterへのpushとpull requestで、GitHub Actionsが `npm test` (Node.js 22 / 24 / 26)と
+`npm run lint` を実行する。定義は `.github/workflows/test.yml`。
 
 GitHub Actionsとnpm(clasp)のバージョン更新は、Dependabotが週次でまとめてPRを作る
 (`.github/dependabot.yml`)。
