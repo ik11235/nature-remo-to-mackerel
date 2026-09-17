@@ -22,5 +22,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
-      # 依存パッケージを持たないため npm ci は不要
+          cache: npm
+      # テスト自体は依存パッケージを使わないが、package-lock.jsonが
+      # インストール可能な状態かをあわせて確認する
+      - run: npm ci
       - run: npm test

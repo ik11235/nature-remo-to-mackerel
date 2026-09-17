@@ -3,9 +3,17 @@
   "private": true,
   "description": "Nature Remo の値を Mackerel に送る Google Apps Script",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "login": "clasp login",
+    "status": "clasp status",
+    "push": "clasp push",
+    "pull": "clasp pull",
+    "logs": "clasp tail-logs"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.4.1"
   }
 }

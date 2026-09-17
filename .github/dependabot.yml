@@ -1,6 +1,5 @@
 version: 2
 updates:
-  # npmの依存パッケージを持たないため、監視対象はGitHub Actionsのみ
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -8,5 +7,15 @@ updates:
     groups:
       # actionsのバージョン更新は個別にPRを作らずまとめる
       github-actions:
+        patterns:
+          - '*'
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # devDependenciesしか持たないためまとめて更新する
+      npm:
         patterns:
           - '*'
