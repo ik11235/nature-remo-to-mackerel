@@ -98,12 +98,24 @@ function runExec(options = {}) {
 }
 
 /**
+ * 指定した分だけ前の時刻をISO8601で返す
+ *
+ * script.js は現在時刻との差で値の鮮度を判断するため、
+ * 固定の日時を使うとテストが時間の経過で意味を変えてしまう
+ *
+ * @param {number} minutes
+ */
+function minutesAgo(minutes) {
+    return new Date(Date.now() - minutes * 60 * 1000).toISOString();
+}
+
+/**
  * newest_events の1項目を組み立てる
  *
  * @param val 値
- * @param [createdAt] 取得時刻(ISO8601)
+ * @param [createdAt] 取得時刻(ISO8601)。既定では直近の時刻
  */
-function sensorEvent(val, createdAt = '2026-09-17T12:23:00Z') {
+function sensorEvent(val, createdAt = minutesAgo(1)) {
     return {val: val, created_at: createdAt};
 }
 
@@ -112,9 +124,9 @@ function sensorEvent(val, createdAt = '2026-09-17T12:23:00Z') {
  *
  * @param epc ECHONETプロパティコード
  * @param val 値
- * @param [updatedAt] 取得時刻(ISO8601)
+ * @param [updatedAt] 取得時刻(ISO8601)。既定では直近の時刻
  */
-function echonetProperty(epc, val, updatedAt = '2026-09-17T12:23:00Z') {
+function echonetProperty(epc, val, updatedAt = minutesAgo(1)) {
     return {epc: epc, val: String(val), updated_at: updatedAt};
 }
 
@@ -134,6 +146,7 @@ function toNameValue(metrics) {
 module.exports = {
     DEFAULT_PROPERTIES,
     runExec,
+    minutesAgo,
     sensorEvent,
     echonetProperty,
     toNameValue,

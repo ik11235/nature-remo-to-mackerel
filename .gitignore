@@ -1,2 +1,3 @@
 .clasp.json
-node_modules/
+# 末尾に / を付けるとディレクトリのみ一致するため、シンボリックリンクの場合に取りこぼす
+node_modules

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const {runExec, sensorEvent, echonetProperty, toNameValue, DEFAULT_PROPERTIES} = require('./gas_stub');
+const {runExec, minutesAgo, sensorEvent, echonetProperty, toNameValue, DEFAULT_PROPERTIES} = require('./gas_stub');
 
 const TARGET_ID = DEFAULT_PROPERTIES.TARGET_NATURE_REMO_ID;
 
@@ -247,7 +247,11 @@ test('スマートメーターの値', async (t) => {
     });
 
     await t.test('updated_atをepoch秒に変換して送信する', () => {
-        const result = runExec({appliances: smartMeterAppliances()});
+        const updatedAt = '2026-09-17T12:23:00Z';
+        const properties = smartMeterAppliances()[0].smart_meter.echonetlite_properties
+            .map((property) => echonetProperty(property.epc, property.val, updatedAt));
+
+        const result = runExec({appliances: smartMeterAppliances(properties)});
 
         assert.ok(result.metrics.every((metric) => metric.time === Math.floor(Date.UTC(2026, 8, 17, 12, 23, 0) / 1000)));
     });
@@ -415,6 +419,74 @@ test('スクリプトプロパティの検証', async (t) => {
         const result = runExec({devices: temperatureAndHumidityDevice(), properties: properties});
 
         assert.strictEqual(result.error, null);
+    });
+});
+
+test('値の鮮度チェック', async (t) => {
+    /**
+     * 指定した分だけ更新が止まっているデバイス
+     */
+    function staleDevice(minutes) {
+        return [{
+            id: TARGET_ID,
+            name: 'remo',
+            newest_events: {te: sensorEvent(22.8, minutesAgo(minutes))},
+        }];
+    }
+
+    const staleLogs = (result) => result.logs.filter((log) => log.startsWith('stale metric'));
+
+    await t.test('既定のしきい値(180分)を超えた値を検知する', () => {
+        const result = staleLogs(runExec({devices: staleDevice(200)}));
+
+        assert.strictEqual(result.length, 1);
+        assert.match(result[0], /stale metric\. name: remo\.temperature, last update: .+ \(200 min ago\)/);
+    });
+
+    await t.test('しきい値未満の値は検知しない', () => {
+        assert.deepStrictEqual(staleLogs(runExec({devices: staleDevice(179)})), []);
+    });
+
+    await t.test('検知してもメトリクスの送信は継続する', () => {
+        const result = runExec({devices: staleDevice(200)});
+
+        assert.deepStrictEqual(toNameValue(result.metrics), {'remo.temperature': 22.8});
+    });
+
+    await t.test('STALE_THRESHOLD_MINUTESでしきい値を変更できる', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {STALE_THRESHOLD_MINUTES: '30'});
+
+        const result = staleLogs(runExec({devices: staleDevice(40), properties: properties}));
+
+        assert.strictEqual(result.length, 1);
+    });
+
+    await t.test('スマートメーターの値も対象にする', () => {
+        const properties = smartMeterAppliances()[0].smart_meter.echonetlite_properties
+            .map((property) => echonetProperty(property.epc, property.val, minutesAgo(200)));
+
+        const result = staleLogs(runExec({appliances: smartMeterAppliances(properties)}));
+
+        assert.strictEqual(result.length, 3);
+    });
+
+    await t.test('数値にならないしきい値が設定された場合、検知をスキップして続行する', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {STALE_THRESHOLD_MINUTES: 'とても長い'});
+
+        const result = runExec({devices: staleDevice(200), properties: properties});
+
+        assert.strictEqual(result.error, null);
+        assert.deepStrictEqual(staleLogs(result), []);
+        assert.ok(result.logs.some((log) => log.includes('invalid STALE_THRESHOLD_MINUTES')));
+        assert.deepStrictEqual(toNameValue(result.metrics), {'remo.temperature': 22.8});
+    });
+
+    await t.test('0以下のしきい値も不正として扱う', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {STALE_THRESHOLD_MINUTES: '0'});
+
+        const result = runExec({devices: staleDevice(200), properties: properties});
+
+        assert.ok(result.logs.some((log) => log.includes('invalid STALE_THRESHOLD_MINUTES')));
     });
 });
 
