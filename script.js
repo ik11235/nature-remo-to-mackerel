@@ -223,7 +223,7 @@ function exec() {
 
     /**
      * Nature Remo Cloud APIのGET /1/appliancesから取得したJSONから、スマートメーターに関する値を成形して返す
-     * スマートメーターの値の成形については、https://developer.nature.global/jp/how-to-calculate-energy-data-from-smart-meter-values 参照
+     * スマートメーターの値の成形については、https://developer.nature.global/docs/how-to-calculate-energy-data-from-smart-meter-values/ 参照
      *
      * @param appliances Nature Remo Cloud APIのGET /1/appliancesから取得したJSONをJSON.parseしたオブジェクト
      * @returns {Object[]}
@@ -232,7 +232,12 @@ function exec() {
         /**
          * スマートメーターから受け取った値群のArrayをオブジェクトに変換する
          * 機種によって返らないプロパティがあるため、見つからない場合はundefinedが入る
-         * 参考: https://developer.nature.global/jp/how-to-calculate-energy-data-from-smart-meter-values
+         *
+         * 瞬時電流計測値(epc 232)は扱っていない
+         * Natureのドキュメントに記載がなく、実機(Remo E lite)のレスポンスにも含まれていないため
+         *
+         * 参考: https://developer.nature.global/docs/how-to-calculate-energy-data-from-smart-meter-values/
+         * および https://developer.nature.global/docs/nature-remo-e-api-specification/
          *
          * @param properties
          * @returns {{cumulative_electric_energy_effective_digits: *, cumulative_electric_energy_unit: *, normal_direction_cumulative_electric_energy: *, coefficient: *, reverse_direction_cumulative_electric_energy: *, measured_instantaneous: *}}
@@ -261,7 +266,7 @@ function exec() {
             const values = {};
 
             // 係数(epc 211)は返さないメーターがあり、その場合は1として扱う
-            // 参考: https://developer.nature.global/jp/how-to-calculate-energy-data-from-smart-meter-values
+            // 参考: https://developer.nature.global/docs/how-to-calculate-energy-data-from-smart-meter-values/
             const coefficient = properties.coefficient ? Number(properties.coefficient.val) : 1;
             const cumulativeUnit = properties.cumulative_electric_energy_unit
                 ? getCumulativeUnit(properties.cumulative_electric_energy_unit.val)
