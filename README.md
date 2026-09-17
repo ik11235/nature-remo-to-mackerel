@@ -1,5 +1,7 @@
 # nature-remo-to-mackerel
 
+[![test](https://github.com/ik11235/nature-remo-to-mackerel/actions/workflows/test.yml/badge.svg)](https://github.com/ik11235/nature-remo-to-mackerel/actions/workflows/test.yml)
+
 Nature Remo, Nature Remo E で取得した温度・湿度・照度・人感・スマートメーターの値をMackerelにPOSTするGoogle Apps Script
 
 # 使い方
@@ -45,7 +47,10 @@ Nature Remo E が接続されていない場合は、Nature Remo 側のメトリ
 npm test
 ```
 
-Node.js標準の `node:test` のみを使うため、依存パッケージのインストールは不要(Node.js 18以上)。
+Node.js標準の `node:test` のみを使うため、依存パッケージのインストールは不要(Node.js 22以上)。
+
+テスト対象はディレクトリではなくファイルのグロブで指定している。
+`node --test test/` というディレクトリ指定はNode.js 22で解決に失敗するため。
 
 `script.js` はclaspでそのままGASへpushするため、Node固有の記法(`module.exports` など)を持ち込めない。
 そのため `test/gas_stub.js` でGASのグローバル(`PropertiesService` / `UrlFetchApp` / `Logger` / `Utilities`)を
@@ -54,3 +59,11 @@ Node.js標準の `node:test` のみを使うため、依存パッケージのイ
 
 `test/` 以下は `.claspignore` の `**/**` で除外される(再includeしているのはルート直下の `*.js` のみ)ため、
 GASへはpushされない。
+
+## CI
+
+masterへのpushとpull requestで、GitHub Actionsが `npm test` を実行する(Node.js 22 / 24 / 26)。
+定義は `.github/workflows/test.yml`。
+
+workflowで使うactionのバージョン更新は、Dependabotが週次でまとめてPRを作る(`.github/dependabot.yml`)。
+npmの依存パッケージを持たないため、監視対象はGitHub Actionsのみ。

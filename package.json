@@ -3,9 +3,9 @@
   "private": true,
   "description": "Nature Remo の値を Mackerel に送る Google Apps Script",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test test/*.test.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   }
 }
