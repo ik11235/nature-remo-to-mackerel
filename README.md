@@ -11,12 +11,16 @@ Nature Remo, Nature Remo E で取得した温度・湿度・照度・人感・�
     - NATURE_TOKEN: Nature Remo Cloud APIを操作するためのアクセストークン
     - MACKEREL_TOKEN: MackerelのAPIを操作するためのアクセストークン(要Write権限)
     - MACKEREL_HOST_ID: Mackerelに取得した値を書き込む際、対象となるホストの固有ID
-    - TARGET_NATURE_REMO_ID: 気温などの値を取得するNATURE_REMOのID
+    - TARGET_NATURE_REMO_ID: 気温などの値を取得するNature RemoのID(任意)
+        - 複数台を対象にする場合はカンマ区切りで指定する (例: `id1,id2`)
+        - 未指定の場合は、取得できた全デバイスを対象にする
 1. execをトリガーで定期的に実行するように設定
 
 # 送信されるメトリック
 
 `<device名>.<項目名>` という名前で送信される(device名に含まれる空白は `_` に置換)。
+複数のデバイスを対象にした場合も、device名で分かれるため衝突しない。
+ただし同名のデバイスが複数あるとメトリック名が重複するため、Nature Remoアプリ側で名前を分けておくこと。
 
 | 項目名 | 内容 |
 | --- | --- |

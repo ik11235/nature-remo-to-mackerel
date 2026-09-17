@@ -19,7 +19,8 @@ const MACKEREL_TOKEN = PropertiesService.getScriptProperties().getProperty("MACK
 const MACKEREL_HOST_ID = PropertiesService.getScriptProperties().getProperty("MACKEREL_HOST_ID");
 /**
  * 気温などの値を取得するNATURE_REMOのID
- * 複数台のNature Remoや、Nature Remo Eと併用している場合、複数のdeviceが取得されるので、1つに絞るために使用
+ * 複数台を対象にする場合はカンマ区切りで指定する (例: `id1,id2`)
+ * 未指定の場合は、取得できた全デバイスを対象にする
  *
  * @type {string}
  */
@@ -39,13 +40,14 @@ function exec() {
      * 実行に必要なスクリプトプロパティが設定されているかを検証する
      * 未設定のまま実行すると401や意図しないメトリック名での送信になり原因が分かりにくいため、
      * APIを叩く前に明示的なエラーで止める
+     *
+     * TARGET_NATURE_REMO_IDは未指定を「全デバイス」の意味で使うため、検証対象に含めない
      */
     function validateScriptProperties() {
         const properties = {
             NATURE_TOKEN: NATURE_TOKEN,
             MACKEREL_TOKEN: MACKEREL_TOKEN,
             MACKEREL_HOST_ID: MACKEREL_HOST_ID,
-            TARGET_NATURE_REMO_ID: TARGET_NATURE_REMO_ID,
         };
 
         const missing = Object.keys(properties).filter(key => !properties[key]);
@@ -315,17 +317,6 @@ function exec() {
      * @returns {Object[]}
      */
     function getNatureRemoMetricValue(devices) {
-        const natureRemoData = devices.filter(function (object) {
-            return object.id === TARGET_NATURE_REMO_ID;
-        })[0];
-
-        // TARGET_NATURE_REMO_IDの設定ミスや、APIが一時的に値を返さない場合でも
-        // スマートメーター側のメトリクス送信は継続させる
-        if (!natureRemoData) {
-            Logger.log(`device is not found. TARGET_NATURE_REMO_ID: ${TARGET_NATURE_REMO_ID}. skip nature remo metrics.`)
-            return []
-        }
-
         // newest_eventsのkeyとMackerelのメトリック名の対応
         const eventNames = {
             te: 'temperature',
@@ -334,19 +325,47 @@ function exec() {
             mo: 'human_sensor',
         };
 
-        const name = natureRemoData["name"];
-        const newestEvents = natureRemoData['newest_events'] || {};
+        /**
+         * device 1台分をmetricValueのarrayに変換する
+         *
+         * @param device GET /1/devices の要素
+         * @returns {Object[]}
+         */
+        function convertDevice(device) {
+            const newestEvents = device['newest_events'] || {};
 
-        // 搭載センサーは機種によって異なる(例: Remo Lapisは温度・湿度のみ、Remo 3は照度・人感も持つ)ため、
-        // 機種で分岐せず、実際に返ってきたkeyだけをメトリクス化する
-        const result = {};
-        for (const [eventKey, metricName] of Object.entries(eventNames)) {
-            if (newestEvents[eventKey]) {
-                result[metricName] = newestEvents[eventKey];
+            // 搭載センサーは機種によって異なる(例: Remo Lapisは温度・湿度のみ、Remo 3は照度・人感も持つ)ため、
+            // 機種で分岐せず、実際に返ってきたkeyだけをメトリクス化する
+            const result = {};
+            for (const [eventKey, metricName] of Object.entries(eventNames)) {
+                if (newestEvents[eventKey]) {
+                    result[metricName] = newestEvents[eventKey];
+                }
             }
+
+            return convertMackerelMetricValue(device['name'], result);
         }
 
-        return convertMackerelMetricValue(name, result);
+        const targetIds = (TARGET_NATURE_REMO_ID || '').split(',')
+            .map(targetId => targetId.trim())
+            .filter(targetId => targetId.length > 0);
+
+        // TARGET_NATURE_REMO_IDが未指定の場合は、取得できた全デバイスを対象にする
+        if (targetIds.length === 0) {
+            return devices.reduce((metrics, device) => metrics.concat(convertDevice(device)), []);
+        }
+
+        return targetIds.reduce(function (metrics, targetId) {
+            const device = devices.filter(object => object.id === targetId)[0];
+
+            // 一部のIDが見つからなくても、残りのデバイスとスマートメーターの送信は継続させる
+            if (!device) {
+                Logger.log(`device is not found. TARGET_NATURE_REMO_ID: ${targetId}. skip this device.`)
+                return metrics;
+            }
+
+            return metrics.concat(convertDevice(device));
+        }, []);
     }
 
     validateScriptProperties()

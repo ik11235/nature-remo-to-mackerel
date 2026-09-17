@@ -146,6 +146,95 @@ test('Nature Remoのセンサー値', async (t) => {
     });
 });
 
+test('対象デバイスの指定', async (t) => {
+    const twoDevices = [
+        {id: 'remo-living', name: 'living', newest_events: {te: sensorEvent(22.8)}},
+        {id: 'remo-bedroom', name: 'bedroom', newest_events: {te: sensorEvent(19.5)}},
+        {id: 'remo-kitchen', name: 'kitchen', newest_events: {te: sensorEvent(25.0)}},
+    ];
+
+    await t.test('カンマ区切りで複数のデバイスを指定できる', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {
+            TARGET_NATURE_REMO_ID: 'remo-living,remo-bedroom',
+        });
+
+        const result = runExec({devices: twoDevices, properties: properties});
+
+        assert.deepStrictEqual(toNameValue(result.metrics), {
+            'living.temperature': 22.8,
+            'bedroom.temperature': 19.5,
+        });
+    });
+
+    await t.test('指定順にメトリクスを並べる', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {
+            TARGET_NATURE_REMO_ID: 'remo-kitchen,remo-living',
+        });
+
+        const result = runExec({devices: twoDevices, properties: properties});
+
+        assert.deepStrictEqual(result.metrics.map((metric) => metric.name), [
+            'kitchen.temperature',
+            'living.temperature',
+        ]);
+    });
+
+    await t.test('カンマ区切りの前後の空白や空要素を無視する', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {
+            TARGET_NATURE_REMO_ID: ' remo-living , , remo-bedroom, ',
+        });
+
+        const result = runExec({devices: twoDevices, properties: properties});
+
+        assert.deepStrictEqual(toNameValue(result.metrics), {
+            'living.temperature': 22.8,
+            'bedroom.temperature': 19.5,
+        });
+    });
+
+    await t.test('一部のIDが見つからなくても、残りのデバイスは送信する', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {
+            TARGET_NATURE_REMO_ID: 'remo-living,unknown-id',
+        });
+
+        const result = runExec({devices: twoDevices, properties: properties});
+
+        assert.strictEqual(result.error, null);
+        assert.deepStrictEqual(toNameValue(result.metrics), {'living.temperature': 22.8});
+        assert.ok(result.logs.some((log) => log.includes('device is not found. TARGET_NATURE_REMO_ID: unknown-id')));
+    });
+
+    await t.test('未指定の場合、取得できた全デバイスを対象にする', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {TARGET_NATURE_REMO_ID: null});
+
+        const result = runExec({devices: twoDevices, properties: properties});
+
+        assert.deepStrictEqual(toNameValue(result.metrics), {
+            'living.temperature': 22.8,
+            'bedroom.temperature': 19.5,
+            'kitchen.temperature': 25.0,
+        });
+    });
+
+    await t.test('空文字の場合も全デバイスを対象にする', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {TARGET_NATURE_REMO_ID: '  '});
+
+        const result = runExec({devices: twoDevices, properties: properties});
+
+        assert.strictEqual(Object.keys(toNameValue(result.metrics)).length, 3);
+    });
+
+    await t.test('未指定かつセンサーを持たないデバイスが混ざっていても落ちない', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {TARGET_NATURE_REMO_ID: null});
+        const devices = twoDevices.concat([{id: 'remo-e', name: 'Remo E lite'}]);
+
+        const result = runExec({devices: devices, properties: properties});
+
+        assert.strictEqual(result.error, null);
+        assert.strictEqual(Object.keys(toNameValue(result.metrics)).length, 3);
+    });
+});
+
 test('スマートメーターの値', async (t) => {
     await t.test('係数と積算電力量単位を掛けた値を送信する', () => {
         const result = runExec({appliances: smartMeterAppliances()});
@@ -316,8 +405,16 @@ test('スクリプトプロパティの検証', async (t) => {
 
         assert.match(
             result.error.message,
-            /script property is not set: NATURE_TOKEN, MACKEREL_TOKEN, MACKEREL_HOST_ID, TARGET_NATURE_REMO_ID/,
+            /script property is not set: NATURE_TOKEN, MACKEREL_TOKEN, MACKEREL_HOST_ID/,
         );
+    });
+
+    await t.test('TARGET_NATURE_REMO_IDは未指定でも失敗しない', () => {
+        const properties = Object.assign({}, DEFAULT_PROPERTIES, {TARGET_NATURE_REMO_ID: null});
+
+        const result = runExec({devices: temperatureAndHumidityDevice(), properties: properties});
+
+        assert.strictEqual(result.error, null);
     });
 });
 
