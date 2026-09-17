@@ -1,0 +1,11 @@
+{
+  "name": "nature-remo-to-mackerel",
+  "private": true,
+  "description": "Nature Remo の値を Mackerel に送る Google Apps Script",
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

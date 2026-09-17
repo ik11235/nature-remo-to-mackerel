@@ -36,3 +36,21 @@ Nature Remo, Nature Remo E で取得した温度・湿度・照度・人感・�
 
 スマートメーター側も同様で、逆方向積算電力量(epc 227)を返さないメーターなどに対応している。
 Nature Remo E が接続されていない場合は、Nature Remo 側のメトリックのみ送信される。
+
+# 開発
+
+## テスト
+
+```
+npm test
+```
+
+Node.js標準の `node:test` のみを使うため、依存パッケージのインストールは不要(Node.js 18以上)。
+
+`script.js` はclaspでそのままGASへpushするため、Node固有の記法(`module.exports` など)を持ち込めない。
+そのため `test/gas_stub.js` でGASのグローバル(`PropertiesService` / `UrlFetchApp` / `Logger` / `Utilities`)を
+スタブした `vm` コンテキストに `script.js` を読み込み、`exec()` を実行して
+「送信されたメトリクス」「HTTPリクエスト」「ログ」を観測する形でテストしている。
+
+`test/` 以下は `.claspignore` の `**/**` で除外される(再includeしているのはルート直下の `*.js` のみ)ため、
+GASへはpushされない。
