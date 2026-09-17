@@ -54,23 +54,6 @@ Mackerel上にホストを持たない運用の場合はサービスメトリッ
 
 `TARGET_NATURE_REMO_ID` と `STALE_THRESHOLD_MINUTES` 以外が未設定の場合、APIを呼ぶ前にエラーで停止する。
 
-## 値の更新が止まった場合
-
-デバイスがオフラインになると、Nature Remo Cloud APIは最後に取得できた値を返し続ける。
-メトリクスのタイムスタンプは値の取得時刻なのでMackerelのグラフは正しく止まるが、
-送信自体は成功するため異常に気づきにくい。
-
-`STALE_THRESHOLD_MINUTES` を超えて更新が止まっている値は、実行ログに記録される。
-
-```
-stale metric. name: Remo_Lapis.temperature, last update: 2026-09-17T12:23:00Z (200 min ago)
-```
-
-検知しても送信は止めない(判断を誤ったときにメトリクスが失われるのを避けるため)。
-
-newest_eventsは値が変化したときに更新されるため、しきい値を短くしすぎると
-気温や湿度が安定しているだけの状態を拾ってしまう点に注意。
-
 ## 3. コードを反映する
 
 ```
@@ -116,6 +99,117 @@ Nature Remo Cloud APIには5分あたり30リクエストのレートリミッ�
 
 スマートメーター側も同様で、逆方向積算電力量(epc 227)を返さないメーターなどに対応している。
 Nature Remo E が接続されていない場合は、Nature Remo 側のメトリックのみ送信される。
+
+## ダッシュボードの定義例
+
+[カスタムダッシュボードAPI](https://mackerel.io/ja/api-docs/entry/dashboards)で作成できる。
+`<MACKEREL_HOST_ID>` を自分のホストIDに置き換えて使う。
+
+```json
+{
+  "title": "Nature Remo",
+  "urlPath": "nature-remo",
+  "memo": "Nature Remo / Nature Remo E から取得した値",
+  "widgets": [
+    {
+      "type": "value",
+      "title": "瞬時電力",
+      "metric": {
+        "type": "expression",
+        "expression": "host(<MACKEREL_HOST_ID>, *.measured_instantaneous)"
+      },
+      "layout": {"x": 0, "y": 0, "width": 6, "height": 4}
+    },
+    {
+      "type": "graph",
+      "title": "温度",
+      "graph": {
+        "type": "expression",
+        "expression": "host(<MACKEREL_HOST_ID>, *.temperature)"
+      },
+      "range": {"type": "relative", "period": 86400, "offset": 0},
+      "layout": {"x": 6, "y": 0, "width": 9, "height": 8}
+    },
+    {
+      "type": "graph",
+      "title": "湿度",
+      "graph": {
+        "type": "expression",
+        "expression": "host(<MACKEREL_HOST_ID>, *.humidity)"
+      },
+      "range": {"type": "relative", "period": 86400, "offset": 0},
+      "layout": {"x": 15, "y": 0, "width": 9, "height": 8}
+    },
+    {
+      "type": "graph",
+      "title": "瞬時電力",
+      "graph": {
+        "type": "expression",
+        "expression": "host(<MACKEREL_HOST_ID>, *.measured_instantaneous)"
+      },
+      "range": {"type": "relative", "period": 86400, "offset": 0},
+      "layout": {"x": 0, "y": 8, "width": 12, "height": 8}
+    },
+    {
+      "type": "graph",
+      "title": "積算電力量",
+      "graph": {
+        "type": "expression",
+        "expression": "host(<MACKEREL_HOST_ID>, *.normal_electric_energy)"
+      },
+      "range": {"type": "relative", "period": 604800, "offset": 0},
+      "layout": {"x": 12, "y": 8, "width": 12, "height": 8}
+    }
+  ]
+}
+```
+
+```
+curl -X POST https://api.mackerelio.com/api/v0/dashboards \
+  -H "X-Api-Key: $MACKEREL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @dashboard.json
+```
+
+メトリック名は `<device名>.<項目名>` なので、
+[式グラフ](https://mackerel.io/ja/docs/entry/advanced/advanced-graph)のワイルドカード `*.temperature` で
+全デバイスの温度を1つのグラフにまとめられる。デバイスを増やしても定義を変えずに済む。
+
+デバイスごとに凡例を指定したい場合は `group()` と `alias()` を使う。
+
+```
+group(
+  alias(host(<MACKEREL_HOST_ID>, Remo_Lapis.temperature), 'リビング'),
+  alias(host(<MACKEREL_HOST_ID>, remo01.temperature), '寝室')
+)
+```
+
+サービスメトリックとして書き込んでいる場合は、`host(<MACKEREL_HOST_ID>, ...)` を
+`service(<MACKEREL_SERVICE_NAME>, ...)` に置き換える。
+
+ウィジェットは幅24のグリッドに配置する。グラフは最小 6×6、数値は最小 4×4。
+
+数値ウィジェット(`type: "value"`)は1つの値しか表示できない。
+上の例では、このスクリプトがスマートメーターを1台のみ対象にするため
+`*.measured_instantaneous` で一意に定まる。温度のように複数デバイスが該当する項目では、
+`Remo_Lapis.temperature` のようにデバイス名まで指定する。
+
+## 値の更新が止まった場合
+
+デバイスがオフラインになると、Nature Remo Cloud APIは最後に取得できた値を返し続ける。
+メトリクスのタイムスタンプは値の取得時刻なのでMackerelのグラフは正しく止まるが、
+送信自体は成功するため異常に気づきにくい。
+
+`STALE_THRESHOLD_MINUTES` を超えて更新が止まっている値は、実行ログに記録される。
+
+```
+stale metric. name: Remo_Lapis.temperature, last update: 2026-09-17T12:23:00Z (200 min ago)
+```
+
+検知しても送信は止めない(判断を誤ったときにメトリクスが失われるのを避けるため)。
+
+newest_eventsは値が変化したときに更新されるため、しきい値を短くしすぎると
+気温や湿度が安定しているだけの状態を拾ってしまう点に注意。
 
 # 開発
 
