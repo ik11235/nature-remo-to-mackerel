@@ -153,9 +153,23 @@ npm test
 スタブした `vm` コンテキストに `script.js` を読み込み、`exec()` を実行して
 「送信されたメトリクス」「HTTPリクエスト」「ログ」を観測する形でテストしている。
 
-`test/` や `node_modules/` は `.claspignore` の `**/**` で除外される
-(再includeしているのはルート直下の `*.js` と `appsscript.json` のみ)ため、GASへはpushされない。
-実際にpushされる対象は `npm run status` で確認できる。
+## GASへpushされるファイル
+
+`.claspignore` で全ファイルを除外したうえで、`script.js` と `appsscript.json` だけを明示的に再includeしている。
+
+```
+**/**
+!script.js
+!appsscript.json
+```
+
+GASはプロジェクト内の全ファイルを読み込んで評価するため、Node.js向けのファイルが混ざると
+`ReferenceError: require is not defined` で全実行が失敗する。
+`!*.js` のようなワイルドカードで再includeすると、ルート直下にファイルを追加したときに
+気づかないままpushされるため、対象は1つずつ列挙する。
+
+この不変条件は `test/claspignore.test.js` で検証している。
+実際にpushされる対象は `npm run status` でも確認できる。
 
 ## Lint
 
