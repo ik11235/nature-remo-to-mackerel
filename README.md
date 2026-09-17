@@ -21,18 +21,18 @@ Nature Remo, Nature Remo E で取得した温度・湿度・照度・人感・�
 | `temperature` | 温度 |
 | `humidity` | 湿度 |
 | `illuminance` | 照度 |
-| `llluminance` | 照度(後述の非推奨な別名) |
 | `human_sensor` | 人感センサー |
 | `normal_electric_energy` | 積算電力量(正方向) |
 | `reverse_electric_energy` | 積算電力量(逆方向) |
 | `measured_instantaneous` | 瞬時電力 |
 
-取得できなかった項目はスキップされる(Remo miniのように湿度・照度を持たない機種や、
-逆方向積算電力量を返さないスマートメーターに対応するため)。
-Nature Remo E が接続されていない場合も、Nature Remo 側のメトリックのみ送信される。
+搭載センサーは機種によって異なるため、取得できた項目のみが送信される。
 
-## `llluminance` について
+| 機種 | 温度 | 湿度 | 照度 | 人感 |
+| --- | :-: | :-: | :-: | :-: |
+| Remo 3 | ✓ | ✓ | ✓ | ✓ |
+| Remo Lapis | ✓ | ✓ | - | - |
+| Remo mini 2 | ✓ | - | - | - |
 
-照度のメトリック名が `llluminance` (先頭が `l` 3つ)とtypoしていた。
-既存のグラフが途切れないよう、現在は `illuminance` と `llluminance` の両方に同じ値を送信している。
-グラフの移行が完了したら、`llluminance` の送信は削除してよい。
+スマートメーター側も同様で、逆方向積算電力量(epc 227)を返さないメーターなどに対応している。
+Nature Remo E が接続されていない場合は、Nature Remo 側のメトリックのみ送信される。

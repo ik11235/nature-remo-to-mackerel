@@ -36,6 +36,25 @@ const TARGET_NATURE_REMO_ID = PropertiesService.getScriptProperties().getPropert
 function exec() {
 
     /**
+     * 実行に必要なスクリプトプロパティが設定されているかを検証する
+     * 未設定のまま実行すると401や意図しないメトリック名での送信になり原因が分かりにくいため、
+     * APIを叩く前に明示的なエラーで止める
+     */
+    function validateScriptProperties() {
+        const properties = {
+            NATURE_TOKEN: NATURE_TOKEN,
+            MACKEREL_TOKEN: MACKEREL_TOKEN,
+            MACKEREL_HOST_ID: MACKEREL_HOST_ID,
+            TARGET_NATURE_REMO_ID: TARGET_NATURE_REMO_ID,
+        };
+
+        const missing = Object.keys(properties).filter(key => !properties[key]);
+        if (missing.length > 0) {
+            throw new Error(`script property is not set: ${missing.join(', ')}. set them in プロジェクトの設定 > スクリプト プロパティ.`);
+        }
+    }
+
+    /**
      * リトライ可能なエラー(429 / 5xx)の場合に、指数バックオフで再試行しつつHTTPリクエストを行う
      *
      * Nature Remo Cloud APIには5分あたり30回のレートリミットがあり、超過すると429が返る
@@ -307,19 +326,30 @@ function exec() {
             return []
         }
 
+        // newest_eventsのkeyとMackerelのメトリック名の対応
+        const eventNames = {
+            te: 'temperature',
+            hu: 'humidity',
+            il: 'illuminance',
+            mo: 'human_sensor',
+        };
+
         const name = natureRemoData["name"];
         const newestEvents = natureRemoData['newest_events'] || {};
-        const result = {
-            temperature: newestEvents['te'],
-            humidity: newestEvents['hu'],
-            illuminance: newestEvents['il'],
-            // 旧実装のtypo。既存グラフが途切れないよう移行期間中は両方の名前で送信する
-            llluminance: newestEvents['il'],
-            human_sensor: newestEvents['mo']
-        };
+
+        // 搭載センサーは機種によって異なる(例: Remo Lapisは温度・湿度のみ、Remo 3は照度・人感も持つ)ため、
+        // 機種で分岐せず、実際に返ってきたkeyだけをメトリクス化する
+        const result = {};
+        for (const [eventKey, metricName] of Object.entries(eventNames)) {
+            if (newestEvents[eventKey]) {
+                result[metricName] = newestEvents[eventKey];
+            }
+        }
 
         return convertMackerelMetricValue(name, result);
     }
+
+    validateScriptProperties()
 
     const devices = JSON.parse(requestNatureAPI("https://api.nature.global/1/devices").getContentText())
     const natureRemoMetricValue = getNatureRemoMetricValue(devices)
