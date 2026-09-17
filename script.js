@@ -36,6 +36,39 @@ const TARGET_NATURE_REMO_ID = PropertiesService.getScriptProperties().getPropert
 function exec() {
 
     /**
+     * リトライ可能なエラー(429 / 5xx)の場合に、指数バックオフで再試行しつつHTTPリクエストを行う
+     *
+     * Nature Remo Cloud APIには5分あたり30回のレートリミットがあり、超過すると429が返る
+     * @see: https://developer.nature.global/
+     *
+     * @param requestUrl リクエストするurl
+     * @param options UrlFetchApp.fetchに渡すオプション
+     * @returns {HTTPResponse} 2xxが返ったレスポンス
+     */
+    function fetchWithRetry(requestUrl, options) {
+        const maxAttempts = 3;
+        const fetchOptions = Object.assign({}, options, {muteHttpExceptions: true});
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            const response = UrlFetchApp.fetch(requestUrl, fetchOptions);
+            const statusCode = response.getResponseCode();
+
+            if (statusCode >= 200 && statusCode < 300) {
+                return response;
+            }
+
+            const retryable = statusCode === 429 || statusCode >= 500;
+            if (!retryable || attempt === maxAttempts) {
+                throw new Error(`request failed. url: ${requestUrl}, status: ${statusCode}, body: ${response.getContentText()}`);
+            }
+
+            const waitMs = 1000 * Math.pow(2, attempt - 1);
+            Logger.log(`retryable error. retry after ${waitMs}ms. url: ${requestUrl}, status: ${statusCode}`);
+            Utilities.sleep(waitMs);
+        }
+    }
+
+    /**
      * 引数で受け取ったNature Cloud APIにアクセスして結果を返す
      * (引数なし・GETでのメソッドのみ対応)
      *
@@ -52,7 +85,7 @@ function exec() {
             "headers": headers,
         };
 
-        return UrlFetchApp.fetch(requestUrl, options);
+        return fetchWithRetry(requestUrl, options);
     }
 
     /**
@@ -69,19 +102,29 @@ function exec() {
             'Content-Type': 'application/json',
             'X-Api-Key': MACKEREL_TOKEN,
         }
+        const payload = JSON.stringify(metricsValue);
         const options = {
             "method": "POST",
             "headers": headers,
-            "payload": JSON.stringify(metricsValue),
+            "payload": payload,
         };
         const requestUrl = "https://api.mackerelio.com/api/v0/tsdb";
 
-        UrlFetchApp.fetch(requestUrl, options)
+        try {
+            fetchWithRetry(requestUrl, options);
+        } catch (error) {
+            // 送信できなかった値を後から追跡できるよう、ペイロードごとログに残す
+            Logger.log(`failed to post metrics to Mackerel. payload: ${payload}`);
+            throw error;
+        }
     }
 
     /**
      * Nature RemoAPIから返ってきたnewest_events/ getSmartMeterValuesで整形したsmart_meterの各値を
      * metricValueのarrayに変換する
+     *
+     * 値が取得できていないkeyや、数値・時刻に変換できないkeyはスキップする
+     * (Remo miniのように湿度・照度を持たない機種や、プロパティが欠落したレスポンスへの対策)
      *
      * metricValueは https://mackerel.io/ja/api-docs/entry/host-metrics#post 参照
      * @param name deviceの名前(Mackerelのメトリック分割用に `device名.key`という名前に変換する)
@@ -93,13 +136,26 @@ function exec() {
         let return_array = []
 
         for (const [key, value] of Object.entries(result)) {
+            if (!value) {
+                Logger.log(`skip metric. value is empty. name: ${name}.${key}`)
+                continue
+            }
+
             const timeBaseValue = value['created_at'] || value['updated_at']
+            const time = Math.floor(new Date(timeBaseValue).getTime() / 1000)
+            const metricValue = Number(value['val'])
+
+            if (!Number.isFinite(time) || !Number.isFinite(metricValue)) {
+                Logger.log(`skip metric. invalid value. name: ${name}.${key}, time: ${timeBaseValue}, val: ${value['val']}`)
+                continue
+            }
+
             const escapeName = `${name}.${key}`.split(' ').join('_')
             return_array.push({
                 hostId: MACKEREL_HOST_ID,
                 name: escapeName,
-                time: Math.floor(new Date(timeBaseValue).getTime() / 1000),
-                value: Number(value['val']),
+                time: time,
+                value: metricValue,
             });
         }
 
@@ -116,6 +172,7 @@ function exec() {
     function getSmartMeterValues(appliances) {
         /**
          * スマートメーターから受け取った値群のArrayをオブジェクトに変換する
+         * 機種によって返らないプロパティがあるため、見つからない場合はundefinedが入る
          * 参考: https://developer.nature.global/jp/how-to-calculate-energy-data-from-smart-meter-values
          *
          * @param properties
@@ -135,37 +192,55 @@ function exec() {
         /**
          * convertSmartMeterPropertiesで変換した値を、扱いやすい形に変換する
          *
+         * 取得できなかったプロパティに対応する値は含めない
+         * (epc 227(逆方向積算電力量)を返さないメーターが存在するため)
+         *
          * @param properties
-         * @returns {{normal_electric_energy: {val: number, updated_at: *}, reverse_electric_energy: {val: number, updated_at: *}, measured_instantaneous: {val: *, updated_at: *}}}
+         * @returns {Object} 算出できた値のみを持つオブジェクト
          */
         function convertSmartMeterValues(properties) {
-            const cumulativeUnit = getCumulativeUnit(properties.cumulative_electric_energy_unit.val);
+            const values = {};
 
-            const normal_electric_energy = {
-                val: properties.normal_direction_cumulative_electric_energy.val * properties.coefficient.val * cumulativeUnit,
-                updated_at: properties.normal_direction_cumulative_electric_energy.updated_at
-            }
-            const reverse_electric_energy = {
-                val: properties.reverse_direction_cumulative_electric_energy.val * properties.coefficient.val * cumulativeUnit,
-                updated_at: properties.reverse_direction_cumulative_electric_energy.updated_at
-            }
-            const measured_instantaneous = {
-                val: properties.measured_instantaneous.val,
-                updated_at: properties.measured_instantaneous.updated_at
+            // 係数(epc 211)は返さないメーターがあり、その場合は1として扱う
+            // 参考: https://developer.nature.global/jp/how-to-calculate-energy-data-from-smart-meter-values
+            const coefficient = properties.coefficient ? Number(properties.coefficient.val) : 1;
+            const cumulativeUnit = properties.cumulative_electric_energy_unit
+                ? getCumulativeUnit(properties.cumulative_electric_energy_unit.val)
+                : null;
+
+            if (cumulativeUnit === null) {
+                Logger.log('skip cumulative electric energy. cumulative_electric_energy_unit(epc 225) is missing or unknown.')
+            } else {
+                if (properties.normal_direction_cumulative_electric_energy) {
+                    values.normal_electric_energy = {
+                        val: properties.normal_direction_cumulative_electric_energy.val * coefficient * cumulativeUnit,
+                        updated_at: properties.normal_direction_cumulative_electric_energy.updated_at
+                    }
+                }
+                if (properties.reverse_direction_cumulative_electric_energy) {
+                    values.reverse_electric_energy = {
+                        val: properties.reverse_direction_cumulative_electric_energy.val * coefficient * cumulativeUnit,
+                        updated_at: properties.reverse_direction_cumulative_electric_energy.updated_at
+                    }
+                }
             }
 
-            return {
-                normal_electric_energy: normal_electric_energy,
-                reverse_electric_energy: reverse_electric_energy,
-                measured_instantaneous: measured_instantaneous
+            if (properties.measured_instantaneous) {
+                values.measured_instantaneous = {
+                    val: properties.measured_instantaneous.val,
+                    updated_at: properties.measured_instantaneous.updated_at
+                }
             }
+
+            return values;
         }
 
         /**
          * スマートメーターから取得した積算電力量単位を実際の単位(kW)に変換する
+         * 未知の値の場合はnullを返す(その値のメトリクス送信のみを諦め、他の値は送信する)
          *
          * @param cumulativeUnit
-         * @return {Number}
+         * @return {?Number}
          */
         function getCumulativeUnit(cumulativeUnit) {
             switch (Number(cumulativeUnit)) {
@@ -188,7 +263,8 @@ function exec() {
                 case 0x0D:
                     return 10000
                 default:
-                    throw 'Parameter is not a cumulativeUnit!';
+                    Logger.log(`unknown cumulativeUnit: ${cumulativeUnit}`)
+                    return null
             }
         }
 
@@ -197,6 +273,13 @@ function exec() {
         const smartMeter = appliances.filter(function (obj) {
             return 'smart_meter' in obj
         })[0]
+
+        // Nature Remo Eを使っていない構成や、APIが一時的に値を返さない場合でも
+        // Nature Remo側のメトリクス送信は継続させる
+        if (!smartMeter) {
+            Logger.log('smart meter is not found in appliances. skip smart meter metrics.')
+            return []
+        }
 
         const name = smartMeter.device.name
         const properties = convertSmartMeterProperties(smartMeter.smart_meter.echonetlite_properties);
@@ -217,12 +300,22 @@ function exec() {
             return object.id === TARGET_NATURE_REMO_ID;
         })[0];
 
+        // TARGET_NATURE_REMO_IDの設定ミスや、APIが一時的に値を返さない場合でも
+        // スマートメーター側のメトリクス送信は継続させる
+        if (!natureRemoData) {
+            Logger.log(`device is not found. TARGET_NATURE_REMO_ID: ${TARGET_NATURE_REMO_ID}. skip nature remo metrics.`)
+            return []
+        }
+
         const name = natureRemoData["name"];
+        const newestEvents = natureRemoData['newest_events'] || {};
         const result = {
-            temperature: natureRemoData['newest_events']['te'],
-            humidity: natureRemoData['newest_events']['hu'],
-            llluminance: natureRemoData['newest_events']['il'],
-            human_sensor: natureRemoData['newest_events']['mo']
+            temperature: newestEvents['te'],
+            humidity: newestEvents['hu'],
+            illuminance: newestEvents['il'],
+            // 旧実装のtypo。既存グラフが途切れないよう移行期間中は両方の名前で送信する
+            llluminance: newestEvents['il'],
+            human_sensor: newestEvents['mo']
         };
 
         return convertMackerelMetricValue(name, result);
@@ -235,5 +328,11 @@ function exec() {
     const metricValue = natureRemoMetricValue.concat(smartMeterMetricValue);
 
     Logger.log(metricValue)
+
+    if (metricValue.length === 0) {
+        Logger.log('no metrics to post. skip posting to Mackerel.')
+        return
+    }
+
     postMackerel(metricValue)
 }
