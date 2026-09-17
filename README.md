@@ -49,6 +49,9 @@ npm test
 
 Node.js標準の `node:test` のみを使うため、依存パッケージのインストールは不要(Node.js 18以上)。
 
+テスト対象はディレクトリではなくファイルのグロブで指定している。
+`node --test test/` というディレクトリ指定はNode.js 22で解決に失敗するため。
+
 `script.js` はclaspでそのままGASへpushするため、Node固有の記法(`module.exports` など)を持ち込めない。
 そのため `test/gas_stub.js` でGASのグローバル(`PropertiesService` / `UrlFetchApp` / `Logger` / `Utilities`)を
 スタブした `vm` コンテキストに `script.js` を読み込み、`exec()` を実行して
