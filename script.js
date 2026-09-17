@@ -25,6 +25,16 @@ const MACKEREL_HOST_ID = PropertiesService.getScriptProperties().getProperty("MA
  * @type {string}
  */
 const TARGET_NATURE_REMO_ID = PropertiesService.getScriptProperties().getProperty("TARGET_NATURE_REMO_ID");
+/**
+ * 値の更新が止まっていると判断するまでの分数
+ * デバイスがオフラインになったことに気づくためのログ出力にのみ使う(送信は止めない)
+ *
+ * Nature Remoのnewest_eventsは値が変化したときに更新されるため、
+ * 短くしすぎると気温や湿度が安定しているだけの状態を拾ってしまう
+ *
+ * @type {string}
+ */
+const STALE_THRESHOLD_MINUTES = PropertiesService.getScriptProperties().getProperty("STALE_THRESHOLD_MINUTES");
 
 /**
  * このGASの本体
@@ -368,6 +378,41 @@ function exec() {
         }, []);
     }
 
+    /**
+     * 値の更新が止まっているメトリクスをログに出す
+     *
+     * デバイスがオフラインになるとNature RemoAPIは最後に取得できた値を返し続けるため、
+     * 送信自体は成功していても値が更新されていないことがある
+     * メトリクスのタイムスタンプは取得時刻なので、現在時刻との差で判断できる
+     *
+     * 送信は止めない(判断を誤ったときにメトリクスが失われるのを避けるため)
+     *
+     * @param {Object[]} metricValue 送信するmetricValueのarray
+     */
+    function logStaleMetrics(metricValue) {
+        const defaultThresholdMinutes = 180;
+        const thresholdMinutes = STALE_THRESHOLD_MINUTES
+            ? Number(STALE_THRESHOLD_MINUTES)
+            : defaultThresholdMinutes;
+
+        if (!Number.isFinite(thresholdMinutes) || thresholdMinutes <= 0) {
+            Logger.log(`invalid STALE_THRESHOLD_MINUTES: ${STALE_THRESHOLD_MINUTES}. skip stale check.`)
+            return
+        }
+
+        const nowSeconds = Math.floor(Date.now() / 1000);
+
+        metricValue.forEach(function (metric) {
+            const elapsedMinutes = Math.floor((nowSeconds - metric.time) / 60);
+            if (elapsedMinutes < thresholdMinutes) {
+                return
+            }
+
+            const lastUpdate = new Date(metric.time * 1000).toISOString();
+            Logger.log(`stale metric. name: ${metric.name}, last update: ${lastUpdate} (${elapsedMinutes} min ago)`)
+        });
+    }
+
     validateScriptProperties()
 
     const devices = JSON.parse(requestNatureAPI("https://api.nature.global/1/devices").getContentText())
@@ -382,6 +427,8 @@ function exec() {
         Logger.log('no metrics to post. skip posting to Mackerel.')
         return
     }
+
+    logStaleMetrics(metricValue)
 
     postMackerel(metricValue)
 }

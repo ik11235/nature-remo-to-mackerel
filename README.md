@@ -37,11 +37,29 @@ GASエディタの「プロジェクトの設定 > スクリプト プロパテ�
 | `MACKEREL_TOKEN` | MackerelのAPIを操作するためのアクセストークン(要Write権限) |
 | `MACKEREL_HOST_ID` | Mackerelに取得した値を書き込む際、対象となるホストの固有ID |
 | `TARGET_NATURE_REMO_ID` | 気温などの値を取得するNature RemoのID(任意) |
+| `STALE_THRESHOLD_MINUTES` | 値の更新が止まったと判断するまでの分数(任意、既定値180) |
 
 `TARGET_NATURE_REMO_ID` は複数台を対象にする場合カンマ区切りで指定する (例: `id1,id2`)。
 未指定の場合は、取得できた全デバイスを対象にする。
 
-`TARGET_NATURE_REMO_ID` 以外が未設定の場合、APIを呼ぶ前にエラーで停止する。
+`TARGET_NATURE_REMO_ID` と `STALE_THRESHOLD_MINUTES` 以外が未設定の場合、APIを呼ぶ前にエラーで停止する。
+
+## 値の更新が止まった場合
+
+デバイスがオフラインになると、Nature Remo Cloud APIは最後に取得できた値を返し続ける。
+メトリクスのタイムスタンプは値の取得時刻なのでMackerelのグラフは正しく止まるが、
+送信自体は成功するため異常に気づきにくい。
+
+`STALE_THRESHOLD_MINUTES` を超えて更新が止まっている値は、実行ログに記録される。
+
+```
+stale metric. name: Remo_Lapis.temperature, last update: 2026-09-17T12:23:00Z (200 min ago)
+```
+
+検知しても送信は止めない(判断を誤ったときにメトリクスが失われるのを避けるため)。
+
+newest_eventsは値が変化したときに更新されるため、しきい値を短くしすぎると
+気温や湿度が安定しているだけの状態を拾ってしまう点に注意。
 
 ## 3. コードを反映する
 
