@@ -6,15 +6,61 @@ Nature Remo, Nature Remo E で取得した温度・湿度・照度・人感・�
 
 # 使い方
 
-1. script.jsをGoogle Apps scriptにコピー
-1. 以下の値をプロジェクトのプロパティに定義
-    - NATURE_TOKEN: Nature Remo Cloud APIを操作するためのアクセストークン
-    - MACKEREL_TOKEN: MackerelのAPIを操作するためのアクセストークン(要Write権限)
-    - MACKEREL_HOST_ID: Mackerelに取得した値を書き込む際、対象となるホストの固有ID
-    - TARGET_NATURE_REMO_ID: 気温などの値を取得するNature RemoのID(任意)
-        - 複数台を対象にする場合はカンマ区切りで指定する (例: `id1,id2`)
-        - 未指定の場合は、取得できた全デバイスを対象にする
-1. execをトリガーで定期的に実行するように設定
+## 1. GASプロジェクトを用意する
+
+[clasp](https://github.com/google/clasp) でローカルからGASへコードを反映する。
+
+```
+npm install
+npm run login
+```
+
+新規に作る場合は `npx clasp create-script --type standalone --title nature-remo-to-mackerel`、
+既存のGASプロジェクトに反映する場合は `.clasp.json` を作る。
+
+```json
+{
+  "scriptId": "<GASのURLの /projects/ と /edit の間の文字列>",
+  "rootDir": "."
+}
+```
+
+`.clasp.json` はアクセス先を特定する情報なので、`.gitignore` でコミット対象から外している。
+
+## 2. スクリプトプロパティを設定する
+
+GASエディタの「プロジェクトの設定 > スクリプト プロパティ」で定義する。
+
+| プロパティ | 内容 |
+| --- | --- |
+| `NATURE_TOKEN` | Nature Remo Cloud APIを操作するためのアクセストークン |
+| `MACKEREL_TOKEN` | MackerelのAPIを操作するためのアクセストークン(要Write権限) |
+| `MACKEREL_HOST_ID` | Mackerelに取得した値を書き込む際、対象となるホストの固有ID |
+| `TARGET_NATURE_REMO_ID` | 気温などの値を取得するNature RemoのID(任意) |
+
+`TARGET_NATURE_REMO_ID` は複数台を対象にする場合カンマ区切りで指定する (例: `id1,id2`)。
+未指定の場合は、取得できた全デバイスを対象にする。
+
+`TARGET_NATURE_REMO_ID` 以外が未設定の場合、APIを呼ぶ前にエラーで停止する。
+
+## 3. コードを反映する
+
+```
+npm run push
+```
+
+反映されるのは `script.js` と `appsscript.json` のみ。
+事前に対象を確認する場合は `npm run status` を使う。
+
+## 4. トリガーを設定する
+
+GASエディタの「トリガー」で、`exec` を時間主導型で定期実行するよう設定する。
+
+Nature Remo Cloud APIには5分あたり30リクエストのレートリミットがあり、
+1回の実行で2リクエスト消費するため、5分間隔でも余裕がある。
+
+あわせてトリガーの通知設定を有効にしておくと、失敗に気づける。
+実行ログは `npm run logs` またはGASエディタの「実行数」から確認できる。
 
 # 送信されるメトリック
 
@@ -45,13 +91,41 @@ Nature Remo E が接続されていない場合は、Nature Remo 側のメトリ
 
 # 開発
 
+必要なNode.jsは22以上。
+
+```
+npm install
+```
+
+## clasp が `clasp` コマンドで動かない場合
+
+clingo(ASPソルバー)にも `clasp` という同名のコマンドが同梱されており、
+Homebrewで入れているとそちらが優先されることがある。
+その場合 `clasp login` は次のように失敗する。
+
+```
+*** ERROR: (clasp): Can not read from 'login'!
+```
+
+このリポジトリではclaspをdevDependenciesに入れ、`npm run push` のような
+npm scripts経由で呼ぶことで `node_modules/.bin/clasp` を使うようにしている。
+グローバルのPATHに影響されないため、この衝突は起きない。
+
+| コマンド | 内容 |
+| --- | --- |
+| `npm run login` | claspのログイン |
+| `npm run status` | pushされるファイルの確認 |
+| `npm run push` | GASへの反映 |
+| `npm run pull` | GASからの取得 |
+| `npm run logs` | 実行ログの表示 |
+
 ## テスト
 
 ```
 npm test
 ```
 
-Node.js標準の `node:test` のみを使うため、依存パッケージのインストールは不要(Node.js 22以上)。
+テスト自体はNode.js標準の `node:test` のみを使い、依存パッケージを使わない。
 
 テスト対象はディレクトリではなくファイルのグロブで指定している。
 `node --test test/` というディレクトリ指定はNode.js 22で解決に失敗するため。
@@ -61,13 +135,14 @@ Node.js標準の `node:test` のみを使うため、依存パッケージのイ
 スタブした `vm` コンテキストに `script.js` を読み込み、`exec()` を実行して
 「送信されたメトリクス」「HTTPリクエスト」「ログ」を観測する形でテストしている。
 
-`test/` 以下は `.claspignore` の `**/**` で除外される(再includeしているのはルート直下の `*.js` のみ)ため、
-GASへはpushされない。
+`test/` や `node_modules/` は `.claspignore` の `**/**` で除外される
+(再includeしているのはルート直下の `*.js` と `appsscript.json` のみ)ため、GASへはpushされない。
+実際にpushされる対象は `npm run status` で確認できる。
 
 ## CI
 
 masterへのpushとpull requestで、GitHub Actionsが `npm test` を実行する(Node.js 22 / 24 / 26)。
 定義は `.github/workflows/test.yml`。
 
-workflowで使うactionのバージョン更新は、Dependabotが週次でまとめてPRを作る(`.github/dependabot.yml`)。
-npmの依存パッケージを持たないため、監視対象はGitHub Actionsのみ。
+GitHub Actionsとnpm(clasp)のバージョン更新は、Dependabotが週次でまとめてPRを作る
+(`.github/dependabot.yml`)。
